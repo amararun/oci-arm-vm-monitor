@@ -66,7 +66,7 @@ def get_config():
         "display_name": os.getenv("OCI_VM_DISPLAY_NAME", "ubuntu-arm-free"),
         "ocpus": int(os.getenv("OCI_OCPUS", "4")),
         "memory_gbs": int(os.getenv("OCI_MEMORY_GBS", "24")),
-        "retry_interval": int(os.getenv("OCI_RETRY_INTERVAL", "60")),
+        "retry_interval": int(os.getenv("OCI_RETRY_INTERVAL", "5")),
     }
 
 def get_oci_config():
