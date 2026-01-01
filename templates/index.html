@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCI ARM VM Monitor</title>
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --bg-terminal: #0a0e14;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --success: #3fb950;
+            --warning: #d29922;
+            --error: #f85149;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .status-badge.idle {
+            background: rgba(139, 148, 158, 0.15);
+            color: var(--text-muted);
+        }
+
+        .status-badge.running {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--accent);
+        }
+
+        .status-badge.success {
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--success);
+        }
+
+        .status-badge.error {
+            background: rgba(248, 81, 73, 0.15);
+            color: var(--error);
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        button {
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 500;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-start {
+            background: var(--success);
+            color: #000;
+        }
+
+        .btn-start:hover:not(:disabled) {
+            background: #46c35d;
+        }
+
+        .btn-stop {
+            background: var(--error);
+            color: #fff;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: #ff6b6b;
+        }
+
+        .btn-clear {
+            background: var(--bg-card);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .btn-clear:hover:not(:disabled) {
+            background: var(--border);
+        }
+
+        .terminal {
+            background: var(--bg-terminal);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .terminal-header {
+            background: var(--bg-card);
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .terminal-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .terminal-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .terminal-dot.red { background: #ff5f56; }
+        .terminal-dot.yellow { background: #ffbd2e; }
+        .terminal-dot.green { background: #27c93f; }
+
+        .terminal-title {
+            flex: 1;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .terminal-body {
+            height: 450px;
+            overflow-y: auto;
+            padding: 16px;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+        }
+
+        .log-timestamp {
+            color: var(--text-muted);
+        }
+
+        .log-info { color: var(--text); }
+        .log-success { color: var(--success); }
+        .log-warning { color: var(--warning); }
+        .log-error { color: var(--error); }
+
+        .config-section {
+            margin-top: 24px;
+            padding: 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .config-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--accent);
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 8px;
+        }
+
+        .config-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+        }
+
+        .config-check {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+        }
+
+        .config-check.ok {
+            background: rgba(63, 185, 80, 0.2);
+            color: var(--success);
+        }
+
+        .config-check.missing {
+            background: rgba(248, 81, 73, 0.2);
+            color: var(--error);
+        }
+
+        .vm-success {
+            margin-top: 24px;
+            padding: 20px;
+            background: rgba(63, 185, 80, 0.1);
+            border: 1px solid var(--success);
+            border-radius: 8px;
+            display: none;
+        }
+
+        .vm-success.show {
+            display: block;
+        }
+
+        .vm-success h3 {
+            color: var(--success);
+            margin-bottom: 12px;
+        }
+
+        footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>OCI ARM VM Monitor</h1>
+            <div id="status-badge" class="status-badge idle">
+                <span class="pulse"></span>
+                <span id="status-text">Idle</span>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Attempts</div>
+                <div class="stat-value" id="attempts">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Current Status</div>
+                <div class="stat-value" id="current-status" style="font-size: 1rem;">Waiting to start...</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Shape</div>
+                <div class="stat-value" style="font-size: 1rem;">VM.Standard.A1.Flex</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Config</div>
+                <div class="stat-value" style="font-size: 1rem;">4 OCPU / 24 GB</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="btn-start" class="btn-start" onclick="startCreation()">Start</button>
+            <button id="btn-stop" class="btn-stop" onclick="stopCreation()" disabled>Stop</button>
+            <button class="btn-clear" onclick="clearLogs()">Clear Logs</button>
+        </div>
+
+        <div id="vm-success" class="vm-success">
+            <h3>VM Created Successfully!</h3>
+            <p>Check vm_creation_result.json for details.</p>
+        </div>
+
+        <div class="terminal">
+            <div class="terminal-header">
+                <div class="terminal-dots">
+                    <span class="terminal-dot red"></span>
+                    <span class="terminal-dot yellow"></span>
+                    <span class="terminal-dot green"></span>
+                </div>
+                <span class="terminal-title">Live Logs</span>
+            </div>
+            <div class="terminal-body" id="logs">
+                <div class="log-entry log-info">Waiting to start...</div>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <div class="config-title">Environment Configuration</div>
+            <div class="config-grid" id="config-grid">
+                <!-- Populated by JavaScript -->
+            </div>
+        </div>
+
+        <footer>
+            OCI ARM VM Monitor &bull; Oracle Cloud Free Tier
+        </footer>
+    </div>
+
+    <script>
+        let eventSource = null;
+
+        // Check config on load
+        async function checkConfig() {
+            try {
+                const res = await fetch('/api/config');
+                const data = await res.json();
+                const grid = document.getElementById('config-grid');
+                grid.innerHTML = '';
+
+                const labels = {
+                    tenancy_ocid: 'Tenancy OCID',
+                    user_ocid: 'User OCID',
+                    fingerprint: 'Fingerprint',
+                    private_key: 'Private Key',
+                    region: 'Region',
+                    compartment_id: 'Compartment ID',
+                    subnet_id: 'Subnet ID',
+                    image_id: 'Image ID',
+                    ssh_public_key: 'SSH Public Key'
+                };
+
+                for (const [key, isSet] of Object.entries(data.configured)) {
+                    if (labels[key]) {
+                        const item = document.createElement('div');
+                        item.className = 'config-item';
+                        item.innerHTML = `
+                            <span class="config-check ${isSet ? 'ok' : 'missing'}">${isSet ? '✓' : '✗'}</span>
+                            <span>${labels[key]}</span>
+                        `;
+                        grid.appendChild(item);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to check config:', e);
+            }
+        }
+
+        // Start VM creation
+        async function startCreation() {
+            try {
+                const res = await fetch('/api/start', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-stop').disabled = false;
+                    document.getElementById('logs').innerHTML = '';
+                    connectSSE();
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert('Failed to start: ' + e.message);
+            }
+        }
+
+        // Stop VM creation
+        async function stopCreation() {
+            try {
+                const res = await fetch('/api/stop', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    document.getElementById('btn-stop').disabled = true;
+                }
+            } catch (e) {
+                alert('Failed to stop: ' + e.message);
+            }
+        }
+
+        // Clear logs
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '<div class="log-entry log-info">Logs cleared.</div>';
+        }
+
+        // Connect to SSE stream
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource('/api/stream');
+
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'log') {
+                    addLogEntry(data.data);
+                } else if (data.type === 'status') {
+                    updateStatus(data.data);
+                }
+            };
+
+            eventSource.onerror = () => {
+                console.log('SSE connection lost, reconnecting...');
+                setTimeout(connectSSE, 2000);
+            };
+        }
+
+        // Add log entry to terminal
+        function addLogEntry(log) {
+            const logsDiv = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${log.level}`;
+            entry.innerHTML = `<span class="log-timestamp">[${log.timestamp}]</span> ${escapeHtml(log.message)}`;
+            logsDiv.appendChild(entry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        // Update status display
+        function updateStatus(status) {
+            document.getElementById('attempts').textContent = status.current_attempt;
+            document.getElementById('current-status').textContent = status.last_status;
+
+            const badge = document.getElementById('status-badge');
+            const statusText = document.getElementById('status-text');
+
+            if (status.vm_created) {
+                badge.className = 'status-badge success';
+                statusText.textContent = 'VM Created!';
+                document.getElementById('vm-success').classList.add('show');
+                document.getElementById('btn-start').disabled = false;
+                document.getElementById('btn-stop').disabled = true;
+            } else if (status.is_running) {
+                badge.className = 'status-badge running';
+                statusText.textContent = 'Running';
+            } else {
+                badge.className = 'status-badge idle';
+                statusText.textContent = 'Idle';
+                document.getElementById('btn-start').disabled = false;
+                document.getElementById('btn-stop').disabled = true;
+            }
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initial status check
+        async function checkStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                updateStatus(data);
+                if (data.is_running) {
+                    document.getElementById('btn-start').disabled = true;
+                    document.getElementById('btn-stop').disabled = false;
+                    connectSSE();
+                }
+            } catch (e) {
+                console.error('Failed to check status:', e);
+            }
+        }
+
+        // Initialize
+        checkConfig();
+        checkStatus();
+    </script>
+</body>
+</html>
