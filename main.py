@@ -1,7 +1,7 @@
 """
 OCI ARM VM Monitor - FastAPI app to create Oracle Cloud ARM VMs
 Retries until capacity is available, with live monitoring UI
-Version: 1.2 - 5 second retry interval
+Version: 1.3 - All config from env vars, no fallbacks
 """
 
 from dotenv import load_dotenv
@@ -24,8 +24,11 @@ from pydantic import BaseModel
 
 # HTTP Basic Auth
 security = HTTPBasic()
-AUTH_USERNAME = os.getenv("AUTH_USERNAME", "admin")
-AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "ovrm2026secure")
+AUTH_USERNAME = os.getenv("AUTH_USERNAME")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD")
+
+if not AUTH_USERNAME or not AUTH_PASSWORD:
+    raise RuntimeError("Missing required environment variables: AUTH_USERNAME, AUTH_PASSWORD")
 
 def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
     """Verify HTTP Basic Auth credentials"""
@@ -52,22 +55,44 @@ class AppState:
 
 state = AppState()
 
+# Required environment variables
+REQUIRED_ENV_VARS = [
+    "OCI_TENANCY_OCID",
+    "OCI_USER_OCID",
+    "OCI_FINGERPRINT",
+    "OCI_PRIVATE_KEY",
+    "OCI_REGION",
+    "OCI_COMPARTMENT_ID",
+    "OCI_SUBNET_ID",
+    "OCI_IMAGE_ID",
+    "OCI_SSH_PUBLIC_KEY",
+    "OCI_VM_DISPLAY_NAME",
+    "OCI_OCPUS",
+    "OCI_MEMORY_GBS",
+    "OCI_RETRY_INTERVAL",
+]
+
+# Check all required env vars at startup
+missing_vars = [var for var in REQUIRED_ENV_VARS if not os.getenv(var)]
+if missing_vars:
+    raise RuntimeError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
 # Configuration from environment variables
 def get_config():
     return {
         "tenancy_ocid": os.getenv("OCI_TENANCY_OCID"),
         "user_ocid": os.getenv("OCI_USER_OCID"),
         "fingerprint": os.getenv("OCI_FINGERPRINT"),
-        "private_key": os.getenv("OCI_PRIVATE_KEY", "").replace("\\n", "\n"),
-        "region": os.getenv("OCI_REGION", "us-ashburn-1"),
+        "private_key": os.getenv("OCI_PRIVATE_KEY").replace("\\n", "\n"),
+        "region": os.getenv("OCI_REGION"),
         "compartment_id": os.getenv("OCI_COMPARTMENT_ID"),
         "subnet_id": os.getenv("OCI_SUBNET_ID"),
         "image_id": os.getenv("OCI_IMAGE_ID"),
         "ssh_public_key": os.getenv("OCI_SSH_PUBLIC_KEY"),
-        "display_name": os.getenv("OCI_VM_DISPLAY_NAME", "ubuntu-arm-free"),
-        "ocpus": int(os.getenv("OCI_OCPUS", "4")),
-        "memory_gbs": int(os.getenv("OCI_MEMORY_GBS", "24")),
-        "retry_interval": int(os.getenv("OCI_RETRY_INTERVAL", "5")),
+        "display_name": os.getenv("OCI_VM_DISPLAY_NAME"),
+        "ocpus": int(os.getenv("OCI_OCPUS")),
+        "memory_gbs": int(os.getenv("OCI_MEMORY_GBS")),
+        "retry_interval": int(os.getenv("OCI_RETRY_INTERVAL")),
     }
 
 def get_oci_config():
@@ -216,7 +241,7 @@ async def vm_creation_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    add_log("OCI ARM VM Monitor v1.2 started (5s retry interval)", "info")
+    add_log("OCI ARM VM Monitor v1.3 started", "info")
     yield
     # Shutdown
     state.should_stop = True
