@@ -294,6 +294,8 @@ async def stream_logs():
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Transfer-Encoding": "chunked",
         }
     )
 

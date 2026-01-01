@@ -448,15 +448,47 @@
             document.getElementById('logs').innerHTML = '<div class="log-entry log-info">Logs cleared.</div>';
         }
 
-        // Connect to SSE stream
+        let pollInterval = null;
+        let lastLogIndex = 0;
+
+        // Polling fallback for live updates
+        async function pollUpdates() {
+            try {
+                const [statusRes, logsRes] = await Promise.all([
+                    fetch('/api/status'),
+                    fetch(`/api/logs?since=${lastLogIndex}`)
+                ]);
+                const status = await statusRes.json();
+                const logsData = await logsRes.json();
+
+                updateStatus(status);
+                if (logsData.logs && logsData.logs.length > 0) {
+                    logsData.logs.forEach(log => addLogEntry(log));
+                    lastLogIndex = logsData.total;
+                }
+            } catch (e) {
+                console.error('Poll failed:', e);
+            }
+        }
+
+        // Connect to SSE stream with polling fallback
         function connectSSE() {
             if (eventSource) {
                 eventSource.close();
             }
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
 
             eventSource = new EventSource('/api/stream');
+            let sseWorking = false;
 
             eventSource.onmessage = (event) => {
+                sseWorking = true;
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
                 const data = JSON.parse(event.data);
 
                 if (data.type === 'log') {
@@ -467,9 +499,25 @@
             };
 
             eventSource.onerror = () => {
-                console.log('SSE connection lost, reconnecting...');
-                setTimeout(connectSSE, 2000);
+                console.log('SSE connection issue, using polling fallback...');
+                if (!pollInterval) {
+                    pollInterval = setInterval(pollUpdates, 2000);
+                }
+                setTimeout(() => {
+                    if (!sseWorking) {
+                        eventSource.close();
+                        connectSSE();
+                    }
+                }, 5000);
             };
+
+            // Start polling as backup after 3 seconds if no SSE data
+            setTimeout(() => {
+                if (!sseWorking && !pollInterval) {
+                    console.log('SSE not responding, starting polling...');
+                    pollInterval = setInterval(pollUpdates, 2000);
+                }
+            }, 3000);
         }
 
         // Add log entry to terminal
