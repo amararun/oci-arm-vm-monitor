@@ -514,16 +514,34 @@
             return div.innerHTML;
         }
 
+        // Load existing logs
+        async function loadExistingLogs() {
+            try {
+                const res = await fetch('/api/logs?since=0');
+                const data = await res.json();
+                if (data.logs && data.logs.length > 0) {
+                    const logsDiv = document.getElementById('logs');
+                    logsDiv.innerHTML = '';
+                    data.logs.forEach(log => addLogEntry(log));
+                }
+            } catch (e) {
+                console.error('Failed to load logs:', e);
+            }
+        }
+
         // Initial status check
         async function checkStatus() {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
                 updateStatus(data);
-                if (data.is_running) {
-                    document.getElementById('btn-start').disabled = true;
-                    document.getElementById('btn-stop').disabled = false;
-                    connectSSE();
+                if (data.is_running || data.log_count > 0) {
+                    document.getElementById('btn-start').disabled = data.is_running;
+                    document.getElementById('btn-stop').disabled = !data.is_running;
+                    await loadExistingLogs();
+                    if (data.is_running) {
+                        connectSSE();
+                    }
                 }
             } catch (e) {
                 console.error('Failed to check status:', e);
