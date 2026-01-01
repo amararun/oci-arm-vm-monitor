@@ -379,7 +379,7 @@
         // Check config on load
         async function checkConfig() {
             try {
-                const res = await fetch('/api/config');
+                const res = await fetch('/api/config', { credentials: 'same-origin' });
                 const data = await res.json();
                 const grid = document.getElementById('config-grid');
                 grid.innerHTML = '';
@@ -415,7 +415,7 @@
         // Start VM creation
         async function startCreation() {
             try {
-                const res = await fetch('/api/start', { method: 'POST' });
+                const res = await fetch('/api/start', { method: 'POST', credentials: 'same-origin' });
                 const data = await res.json();
                 if (data.status === 'ok') {
                     document.getElementById('btn-start').disabled = true;
@@ -433,7 +433,7 @@
         // Stop VM creation
         async function stopCreation() {
             try {
-                const res = await fetch('/api/stop', { method: 'POST' });
+                const res = await fetch('/api/stop', { method: 'POST', credentials: 'same-origin' });
                 const data = await res.json();
                 if (data.status === 'ok') {
                     document.getElementById('btn-stop').disabled = true;
@@ -455,8 +455,8 @@
         async function pollUpdates() {
             try {
                 const [statusRes, logsRes] = await Promise.all([
-                    fetch('/api/status'),
-                    fetch(`/api/logs?since=${lastLogIndex}`)
+                    fetch('/api/status', { credentials: 'same-origin' }),
+                    fetch(`/api/logs?since=${lastLogIndex}`, { credentials: 'same-origin' })
                 ]);
                 const status = await statusRes.json();
                 const logsData = await logsRes.json();
@@ -480,7 +480,7 @@
                 clearInterval(pollInterval);
             }
 
-            eventSource = new EventSource('/api/stream');
+            eventSource = new EventSource('/api/stream', { withCredentials: true });
             let sseWorking = false;
 
             eventSource.onmessage = (event) => {
@@ -565,7 +565,7 @@
         // Load existing logs
         async function loadExistingLogs() {
             try {
-                const res = await fetch('/api/logs?since=0');
+                const res = await fetch('/api/logs?since=0', { credentials: 'same-origin' });
                 const data = await res.json();
                 if (data.logs && data.logs.length > 0) {
                     const logsDiv = document.getElementById('logs');
@@ -580,7 +580,7 @@
         // Initial status check
         async function checkStatus() {
             try {
-                const res = await fetch('/api/status');
+                const res = await fetch('/api/status', { credentials: 'same-origin' });
                 const data = await res.json();
                 updateStatus(data);
                 if (data.is_running || data.log_count > 0) {

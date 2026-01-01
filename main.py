@@ -14,10 +14,29 @@ from typing import Optional
 from contextlib import asynccontextmanager
 
 import oci
-from fastapi import FastAPI, Request, BackgroundTasks
+import secrets
+from fastapi import FastAPI, Request, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
+
+# HTTP Basic Auth
+security = HTTPBasic()
+AUTH_USERNAME = os.getenv("AUTH_USERNAME", "admin")
+AUTH_PASSWORD = os.getenv("AUTH_PASSWORD", "ovrm2026secure")
+
+def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+    """Verify HTTP Basic Auth credentials"""
+    correct_username = secrets.compare_digest(credentials.username, AUTH_USERNAME)
+    correct_password = secrets.compare_digest(credentials.password, AUTH_PASSWORD)
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 # Global state
 class AppState:
@@ -207,12 +226,12 @@ app = FastAPI(title="OCI ARM VM Monitor", lifespan=lifespan)
 templates = Jinja2Templates(directory="templates")
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+async def index(request: Request, username: str = Depends(verify_credentials)):
     """Serve the main monitoring UI"""
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/api/start")
-async def start_creation():
+async def start_creation(username: str = Depends(verify_credentials)):
     """Start the VM creation loop"""
     if state.is_running:
         return JSONResponse({"status": "error", "message": "Already running"}, status_code=400)
@@ -230,7 +249,7 @@ async def start_creation():
     return {"status": "ok", "message": "Started"}
 
 @app.post("/api/stop")
-async def stop_creation():
+async def stop_creation(username: str = Depends(verify_credentials)):
     """Stop the VM creation loop"""
     if not state.is_running:
         return JSONResponse({"status": "error", "message": "Not running"}, status_code=400)
@@ -241,7 +260,7 @@ async def stop_creation():
     return {"status": "ok", "message": "Stop requested"}
 
 @app.get("/api/status")
-async def get_status():
+async def get_status(username: str = Depends(verify_credentials)):
     """Get current status"""
     return {
         "is_running": state.is_running,
@@ -253,7 +272,7 @@ async def get_status():
     }
 
 @app.get("/api/logs")
-async def get_logs(since: int = 0):
+async def get_logs(since: int = 0, username: str = Depends(verify_credentials)):
     """Get logs since index"""
     return {
         "logs": state.logs[since:],
@@ -261,7 +280,7 @@ async def get_logs(since: int = 0):
     }
 
 @app.get("/api/stream")
-async def stream_logs():
+async def stream_logs(username: str = Depends(verify_credentials)):
     """Server-Sent Events stream for live logs"""
     async def event_generator():
         last_index = 0
@@ -300,7 +319,7 @@ async def stream_logs():
     )
 
 @app.get("/api/config")
-async def get_config_status():
+async def get_config_status(username: str = Depends(verify_credentials)):
     """Check if config is set (without exposing values)"""
     config = get_config()
     return {
