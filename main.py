@@ -1,6 +1,7 @@
 """
 OCI ARM VM Monitor - FastAPI app to create Oracle Cloud ARM VMs
 Retries until capacity is available, with live monitoring UI
+Version: 1.2 - 5 second retry interval
 """
 
 from dotenv import load_dotenv
@@ -215,7 +216,7 @@ async def vm_creation_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    add_log("OCI ARM VM Monitor started", "info")
+    add_log("OCI ARM VM Monitor v1.2 started (5s retry interval)", "info")
     yield
     # Shutdown
     state.should_stop = True
