@@ -1,7 +1,7 @@
 """
 OCI ARM VM Monitor - FastAPI app to create Oracle Cloud ARM VMs
 Retries until capacity is available, with live monitoring UI
-Version: 1.3 - All config from env vars, no fallbacks
+Version: 1.4 - Added OCI_AD_DELAY for delay between AD attempts
 """
 
 from dotenv import load_dotenv
@@ -70,6 +70,7 @@ REQUIRED_ENV_VARS = [
     "OCI_OCPUS",
     "OCI_MEMORY_GBS",
     "OCI_RETRY_INTERVAL",
+    "OCI_AD_DELAY",
 ]
 
 # Check all required env vars at startup
@@ -93,6 +94,7 @@ def get_config():
         "ocpus": int(os.getenv("OCI_OCPUS")),
         "memory_gbs": int(os.getenv("OCI_MEMORY_GBS")),
         "retry_interval": int(os.getenv("OCI_RETRY_INTERVAL")),
+        "ad_delay": int(os.getenv("OCI_AD_DELAY")),
     }
 
 def get_oci_config():
@@ -180,7 +182,7 @@ async def vm_creation_loop():
         return
 
     add_log(f"Starting VM creation loop (Shape: VM.Standard.A1.Flex, {config['ocpus']} OCPUs, {config['memory_gbs']} GB RAM)", "info")
-    add_log(f"Retry interval: {config['retry_interval']} seconds", "info")
+    add_log(f"Retry interval: {config['retry_interval']}s, AD delay: {config['ad_delay']}s", "info")
 
     state.current_attempt = 0
 
@@ -221,6 +223,10 @@ async def vm_creation_loop():
                 else:
                     add_log(f"  -> {message}", "warning")
 
+                # Delay between AD attempts (not after last AD)
+                if ad != AVAILABILITY_DOMAINS[-1] and not state.should_stop:
+                    await asyncio.sleep(config['ad_delay'])
+
         if not state.vm_created and not state.should_stop:
             add_log(f"All ADs tried. Waiting {config['retry_interval']} seconds...", "info")
             state.last_status = f"Waiting {config['retry_interval']}s..."
@@ -241,7 +247,7 @@ async def vm_creation_loop():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    add_log("OCI ARM VM Monitor v1.3 started", "info")
+    add_log("OCI ARM VM Monitor v1.4 started", "info")
     yield
     # Shutdown
     state.should_stop = True
