@@ -1,0 +1,27 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+
+# Results
+vm_creation_result.json
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code settings (may contain tokens)
+.claude/
+
+# Local documentation (personal setup notes)
+docs/
+
+# Windows artifacts
+nul
