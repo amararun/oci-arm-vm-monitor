@@ -126,6 +126,12 @@ The script generates ~60 seconds of light CPU activity. Remove it once you have 
 - Results are saved to `vm_creation_result.json` on success
 - Checks all 3 availability domains each round
 
+## Author
+
+Built by [Amar Harolikar](https://www.linkedin.com/in/amarharolikar/)
+
+Explore 30+ open source AI tools for analytics, databases & automation at [tigzig.com](https://tigzig.com)
+
 ## License
 
 MIT
